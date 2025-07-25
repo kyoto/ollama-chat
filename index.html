@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            background-color: #f4f4f8;
+            display: flex;
+            height: 100vh;
+            color: #333;
+            overflow: hidden;
+        }
+
+        #app-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        #sidebar {
+            width: 280px;
+            background-color: #e9ecef;
+            border-right: 1px solid #ced4da;
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            overflow-y: auto;
+            flex-shrink: 0; 
+        }
+
+        #sidebar h2 {
+            font-size: 1.2em;
+            color: #343a40;
+            margin-top: 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #ced4da;
+            padding-bottom: 10px;
+        }
+        
+        #new-chat-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            text-align: center;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            transition: background-color 0.2s ease;
+        }
+        #new-chat-button:hover {
+            background-color: #0056b3;
+        }
+
+        #conversation-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            flex-grow: 1;
+        }
+
+        .conversation-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+            font-size: 0.9em;
+            position: relative;
+        }
+
+        .conversation-item:hover {
+            background-color: #f8f9fa;
+            border-color: #007bff;
+        }
+        .conversation-item.active {
+            background-color: #007bff;
+            color: white;
+            border-color: #0056b3;
+        }
+        .conversation-item.active .conversation-model {
+            color: #e0e0e0;
+        }
+         .conversation-item.active .delete-conversation {
+            color: #f8f9fa;
+            background-color: #0056b3;
+         }
+         .conversation-item.active .delete-conversation:hover {
+            color: white;
+            background-color: #c82333;
+         }
+
+        .conversation-title {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-right: 25px;
+        }
+
+        .conversation-model {
+            font-size: 0.8em;
+            color: #6c757d;
+            display: block;
+            margin-bottom: 6px;
+        }
+        .conversation-item-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .delete-conversation {
+            position: absolute;
+            top: 0px;
+            right: 0px;
+            background: #eee;
+            border: none;
+            color: #dc3545;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 3px 7px;
+            line-height: 1;
+            border-top-right-radius: 5px;
+            border-bottom-left-radius: 5px;
+        }
+        .delete-conversation:hover {
+            background: #dc3545;
+            color: white;
+        }
+
+        #chat-area {
+            flex-grow: 1;
+            display: flex;
+            padding: 0; 
+            background-color: #f4f4f8; 
+            height: 100vh; 
+            box-sizing: border-box;
+            overflow: hidden; 
+            position: relative; 
+        }
+        #chat-area.drop-zone-active::before {
+            content: "Drop files here";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 123, 255, 0.1);
+            border: 3px dashed #007bff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            color: #007bff;
+            pointer-events: none; 
+            z-index: 10; 
+        }
+
+        #chat-container {
+            width: 100%; 
+            background-color: #fff;
+            display: flex;
+            flex-direction: column;
+            height: 100%; 
+            overflow: hidden; 
+        }
+
+        #chat-header {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0; 
+        }
+
+        #chat-header h1 {
+            font-size: 1.1em;
+            margin: 0;
+            padding-left: 10px; 
+        }
+
+        #model-selector-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding-right: 10px; 
+        }
+
+        #model-selector-container label {
+            font-size: 0.9em;
+            color: #f0f0f0;
+        }
+
+        #model-selector {
+            padding: 6px 10px;
+            border-radius: 5px;
+            border: 1px solid #0056b3;
+            background-color: #fff;
+            color: #333;
+            font-size: 0.9em;
+        }
+        #model-selector:disabled { 
+            background-color: #e9ecef;
+            color: #6c757d;
+            border-color: #ced4da;
+        }
+        #model-selector:focus {
+            outline: none;
+            border-color: #004085;
+        }
+
+        #chat-messages {
+            flex-grow: 1;
+            padding: 20px; 
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 90%; 
+            line-height: 1.5; 
+            word-wrap: break-word; 
+            overflow-wrap: break-word; 
+            position: relative; 
+        }
+
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 5px;
+        }
+
+        .bot-message {
+            background-color: #e9ecef;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 5px;
+        }
+        .bot-message h1, .bot-message h2, .bot-message h3, .bot-message h4, .bot-message h5, .bot-message h6 {
+            margin-top: 0.8em;
+            margin-bottom: 0.4em;
+            line-height: 1.2;
+        }
+        .bot-message p {
+            margin-top: 0;
+            margin-bottom: 0.5em;
+        }
+        .bot-message blockquote {
+            margin-left: 10px;
+            padding-left: 10px;
+            border-left: 3px solid #007bff;
+            color: #555;
+        }
+        
+        .spinner {
+            border: 3px solid rgba(0,0,0,.1);
+            border-left-color: #007bff;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-top: -8px; 
+            margin-left: -8px; 
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .bot-message strong { font-weight: bold; }
+        .bot-message em { font-style: italic; }
+        .bot-message a { color: #0056b3; text-decoration: underline; }
+        .bot-message a:hover { color: #003d7a; }
+        .bot-message ul, .bot-message ol { padding-left: 20px; margin-top: 5px; margin-bottom: 5px; }
+        .bot-message li { margin-bottom: 2px; }
+        .bot-message code:not(pre code) { 
+            background-color: #f0f0f0; padding: 2px 4px; 
+            border-radius: 3px; font-family: "Courier New", Courier, monospace; font-size: 0.9em;
+        }
+        .bot-message pre { 
+            white-space: pre-wrap; 
+            word-wrap: break-word; 
+            overflow-wrap: break-word; 
+            background-color: #f8f9fa;
+            padding: 10px; border-radius: 5px; border: 1px solid #ddd;
+            font-family: "Courier New", Courier, monospace; font-size: 0.9em; 
+            overflow-x: auto; 
+        }
+        .bot-message pre code { 
+            background-color: transparent; 
+            padding: 0; 
+            border-radius: 0; 
+            font-size: inherit;
+            white-space: pre-wrap !important; 
+        }
+
+        #input-area-wrapper { 
+            padding: 15px;
+            border-top: 1px solid #ddd;
+            background-color: #f8f9fa;
+            flex-shrink: 0;
+        }
+        #input-area {
+            display: flex; 
+        }
+        #user-input {
+            flex-grow: 1; padding: 10px 15px; border: 1px solid #ccc;
+            border-radius: 20px; margin-right: 10px; font-size: 1em;
+        }
+        #user-input:focus {
+            outline: none; border-color: #007bff; box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        #send-button {
+            padding: 10px 20px; background-color: #007bff; color: white;
+            border: none; border-radius: 20px; cursor: pointer; font-size: 1em;
+            transition: background-color 0.2s ease;
+        }
+        #send-button:hover { background-color: #0056b3; }
+        #send-button:disabled { background-color: #a0cfff; cursor: not-allowed; }
+        
+        #attachments-area {
+            margin-top: 10px; 
+            margin-bottom: 10px; 
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .attachment-item {
+            background-color: #e9ecef;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid #ced4da;
+        }
+        .attachment-item span {
+            max-width: 150px; 
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .delete-attachment {
+            background: #e0e0e0;
+            border: 1px solid #ccc;
+            color: #dc3545;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 0px 5px;
+            border-radius: 50%;
+            line-height: 18px;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .delete-attachment:hover {
+            background: #dc3545;
+            color: white;
+            border-color: #c82333;
+        }
+
+        .error-message { color: red; font-weight: bold; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="sidebar">
+            <h2>Chat History</h2>
+            <button id="new-chat-button">New Chat</button>
+            <ul id="conversation-list"></ul>
+        </div>
+        <div id="chat-area"> 
+            <div id="chat-container">
+                <div id="chat-header">
+                    <h1>Ollama LLM Chat</h1>
+                    <div id="model-selector-container">
+                        <label for="model-selector">Model:</label>
+                        <select id="model-selector" disabled> <option value="">Loading models...</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="chat-messages"></div>
+                <div id="input-area-wrapper"> 
+                    <div id="attachments-area"></div>
+                    <div id="input-area">
+                        <input type="text" id="user-input" placeholder="Ask something or drop files..." disabled>
+                        <button id="send-button" disabled>Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const modelSelector = document.getElementById('model-selector');
+        const conversationList = document.getElementById('conversation-list');
+        const newChatButton = document.getElementById('new-chat-button');
+        const chatArea = document.getElementById('chat-area'); 
+        const attachmentsArea = document.getElementById('attachments-area');
+
+        const OLLAMA_API_BASE_URL = 'http://localhost:11434/api';
+        const DEFAULT_MODEL_NAME = 'gemma3:12b'; 
+        const LS_CONVERSATIONS_KEY = 'ollamaChatConversations';
+
+        let conversationHistory = []; 
+        let activeConversationId = null; 
+        let currentAttachments = []; 
+
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter' && !sendButton.disabled) sendMessage();
+        });
+
+        modelSelector.addEventListener('change', () => {
+            const selectedModel = modelSelector.value;
+            if (selectedModel) {
+                updateUrlWithModel(selectedModel, activeConversationId); 
+            }
+        });
+        
+        newChatButton.addEventListener('click', () => {
+            const currentSelectedModel = modelSelector.value; 
+            startNewConversation(currentSelectedModel);
+        });
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            chatArea.addEventListener(eventName, preventDefaults, false); 
+            document.body.addEventListener(eventName, preventDefaults, false); 
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            chatArea.addEventListener(eventName, () => chatArea.classList.add('drop-zone-active'), false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            chatArea.addEventListener(eventName, () => chatArea.classList.remove('drop-zone-active'), false);
+        });
+
+        chatArea.addEventListener('drop', handleFileDrop, false); 
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleFileDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files.length) {
+                Array.from(files).forEach(file => {
+                    if (file.type.startsWith('text/') || /\.(md|txt|json|ya?ml|csv|xml|html|js|py|css)$/i.test(file.name)) {
+                        const reader = new FileReader();
+                        reader.readAsText(file);
+                        reader.onload = () => {
+                            currentAttachments.push({ name: file.name, content: reader.result });
+                            renderAttachments();
+                        };
+                        reader.onerror = () => {
+                            console.error("Error reading file:", file.name);
+                            addMessageToChat(`Error reading file: ${file.name}`, 'bot', true);
+                        };
+                    } else {
+                        addMessageToChat(`File type not supported: ${file.name}. Please drop text-based files.`, 'bot', true);
+                    }
+                });
+            }
+        }
+
+        function renderAttachments() {
+            attachmentsArea.innerHTML = '';
+            attachmentsArea.style.marginTop = currentAttachments.length > 0 ? '10px' : '0px';
+            currentAttachments.forEach((file, index) => {
+                const attachmentEl = document.createElement('div');
+                attachmentEl.classList.add('attachment-item');
+                
+                const nameEl = document.createElement('span');
+                nameEl.textContent = file.name;
+                nameEl.title = file.name; 
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.classList.add('delete-attachment');
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.title = 'Remove attachment';
+                deleteBtn.onclick = () => deleteAttachment(index);
+
+                attachmentEl.appendChild(nameEl);
+                attachmentEl.appendChild(deleteBtn);
+                attachmentsArea.appendChild(attachmentEl);
+            });
+        }
+
+        function deleteAttachment(index) {
+            currentAttachments.splice(index, 1);
+            renderAttachments();
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            marked.setOptions({
+                breaks: true, 
+                gfm: true,    
+                sanitize: true 
+            });
+
+            await loadModelsAndSetSelection(); 
+            loadAndRenderSidebar(); 
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const chatIdFromUrl = urlParams.get('chatId');
+            const modelFromUrl = urlParams.get('model');
+
+            if (chatIdFromUrl) {
+                loadConversation(chatIdFromUrl);
+            } else {
+                startNewConversation(modelFromUrl || modelSelector.value || DEFAULT_MODEL_NAME); 
+            }
+        });
+        
+        function startNewConversation(initialModel = null) {
+            activeConversationId = null; 
+            conversationHistory = [];
+            currentAttachments = []; 
+            renderAttachments();     
+            chatMessages.innerHTML = '';
+            userInput.value = '';
+            userInput.focus();
+            
+            let modelToPreserve = initialModel || modelSelector.value;
+
+            if (modelToPreserve && Array.from(modelSelector.options).some(opt => opt.value === modelToPreserve)) {
+                modelSelector.value = modelToPreserve;
+            } else if (modelSelector.options.length > 0 && modelSelector.options[0].value !== "") {
+                modelSelector.value = modelSelector.options[0].value;
+            }
+
+            updateUrlWithModel(modelSelector.value); 
+            
+            document.querySelectorAll('.conversation-item.active').forEach(item => item.classList.remove('active'));
+        }
+
+        function updateUrlWithModel(modelName, chatId = null) {
+            const currentUrl = new URL(window.location.href);
+            if (modelName && modelName !== "No models found" && modelName !== "Error loading models") {
+                currentUrl.searchParams.set('model', modelName);
+            } else {
+                currentUrl.searchParams.delete('model'); 
+            }
+
+            if (chatId) {
+                currentUrl.searchParams.set('chatId', chatId);
+            } else {
+                currentUrl.searchParams.delete('chatId'); 
+            }
+            window.history.pushState({ path: currentUrl.href }, '', currentUrl.href);
+        }
+
+        function getAllConversations() {
+            const conversations = localStorage.getItem(LS_CONVERSATIONS_KEY);
+            return conversations ? JSON.parse(conversations) : [];
+        }
+
+        function saveCurrentConversation() {
+            if (!conversationHistory.length) return;
+
+            let conversations = getAllConversations();
+            const currentModel = modelSelector.value;
+
+            const firstUserMessage = conversationHistory.find(msg => msg.role === 'user');
+            let title = "Chat";
+            if (activeConversationId) {
+                const existingConv = conversations.find(c => c.id === activeConversationId);
+                if (existingConv && existingConv.title !== "New Chat" && existingConv.title !== "Chat") title = existingConv.title;
+                else if (firstUserMessage) title = firstUserMessage.content.substring(0, 100);
+            } else if (firstUserMessage) {
+                title = firstUserMessage.content.substring(0, 100);
+            }
+
+            if (activeConversationId) { 
+                const index = conversations.findIndex(c => c.id === activeConversationId);
+                if (index !== -1) {
+                    conversations[index].messages = [...conversationHistory];
+                    conversations[index].lastModelUsed = currentModel;
+                    conversations[index].timestamp = Date.now();
+                    if (conversations[index].title === "New Chat" || conversations[index].title === "Chat") { 
+                        conversations[index].title = title;
+                    }
+                } else { 
+                    activeConversationId = Date.now().toString(); 
+                    conversations.push({
+                        id: activeConversationId, title, messages: [...conversationHistory],
+                        lastModelUsed: currentModel, timestamp: Date.now()
+                    });
+                }
+            } else { 
+                activeConversationId = Date.now().toString();
+                conversations.push({
+                    id: activeConversationId, title, messages: [...conversationHistory],
+                    lastModelUsed: currentModel, timestamp: Date.now()
+                });
+            }
+            localStorage.setItem(LS_CONVERSATIONS_KEY, JSON.stringify(conversations));
+            loadAndRenderSidebar(); 
+            updateUrlWithModel(currentModel, activeConversationId); 
+        }
+        
+        function loadConversation(id) {
+            const conversations = getAllConversations();
+            const conversation = conversations.find(c => c.id === id);
+            if (conversation) {
+                activeConversationId = id;
+                conversationHistory = [...conversation.messages];
+                currentAttachments = []; 
+                renderAttachments();
+                chatMessages.innerHTML = ''; 
+                conversationHistory.forEach(msg => {
+                    if (msg.role === 'user') {
+                        addMessageToChat(msg.content, 'user');
+                    } else {
+                        const botMsgEl = createEmptyBotMessageElement();
+                        removeSpinner(botMsgEl); 
+                        renderBotMessageContent(botMsgEl, msg.content, false);
+                    }
+                });
+                
+                if (Array.from(modelSelector.options).some(opt => opt.value === conversation.lastModelUsed)) {
+                    modelSelector.value = conversation.lastModelUsed;
+                } else if (modelSelector.options.length > 0 && modelSelector.options[0].value !== "") {
+                    modelSelector.value = modelSelector.options[0].value;
+                    console.warn(`Model ${conversation.lastModelUsed} from loaded chat not found. Using ${modelSelector.value}.`);
+                }
+
+                updateUrlWithModel(modelSelector.value, id); 
+                userInput.focus();
+                loadAndRenderSidebar(); 
+            } else {
+                console.warn(`Conversation with ID ${id} not found. Starting new chat.`);
+                startNewConversation(modelSelector.value); 
+            }
+        }
+
+        function deleteConversation(id, event) {
+            event.stopPropagation(); 
+            let conversations = getAllConversations();
+            conversations = conversations.filter(c => c.id !== id);
+            localStorage.setItem(LS_CONVERSATIONS_KEY, JSON.stringify(conversations));
+            
+            if (activeConversationId === id) { 
+                startNewConversation(modelSelector.value); 
+            }
+            loadAndRenderSidebar();
+        }
+
+        function loadAndRenderSidebar() {
+            const conversations = getAllConversations();
+            conversations.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); 
+            conversationList.innerHTML = '';
+            conversations.forEach(conv => {
+                const item = document.createElement('li');
+                item.classList.add('conversation-item');
+                if (conv.id === activeConversationId) {
+                    item.classList.add('active');
+                }
+                item.dataset.id = conv.id;
+
+                const titleEl = document.createElement('span');
+                titleEl.classList.add('conversation-title');
+                titleEl.textContent = conv.title || "Chat";
+
+                const modelEl = document.createElement('span');
+                modelEl.classList.add('conversation-model');
+                modelEl.textContent = conv.lastModelUsed || '';
+                
+                const footerEl = document.createElement('div');
+                footerEl.classList.add('conversation-item-footer');
+                footerEl.appendChild(modelEl);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.classList.add('delete-conversation');
+                deleteBtn.innerHTML = '&times;'; 
+                deleteBtn.onclick = (event) => deleteConversation(conv.id, event);
+
+                item.appendChild(deleteBtn); 
+                item.appendChild(titleEl);
+                item.appendChild(footerEl);
+                
+                item.onclick = () => loadConversation(conv.id);
+                conversationList.appendChild(item);
+            });
+        }
+
+        async function loadModelsAndSetSelection() {
+            try {
+                const response = await fetch(`${OLLAMA_API_BASE_URL}/tags`);
+                if (!response.ok) throw new Error(`HTTP ${response.status} - Could not fetch models.`);
+                const data = await response.json();
+                
+                modelSelector.innerHTML = ''; 
+                let modelsAvailable = data.models && data.models.length > 0;
+
+                if (modelsAvailable) {
+                    data.models.sort((a, b) => a.name.localeCompare(b.name));
+
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.name; option.textContent = model.name;
+                        modelSelector.appendChild(option);
+                    });
+                    modelSelector.disabled = false; 
+                } else { 
+                    modelSelector.innerHTML = '<option value="">No models found</option>';
+                }
+            } catch (error) {
+                console.error('Error loading models:', error.message);
+                modelSelector.innerHTML = '<option value="">Error loading models</option>';
+            }
+            
+            const urlParams = new URLSearchParams(window.location.search);
+            const modelFromUrl = urlParams.get('model');
+            let modelToSelectInitially = null;
+
+            if (modelFromUrl && Array.from(modelSelector.options).some(opt => opt.value === modelFromUrl)) {
+                modelToSelectInitially = modelFromUrl;
+            } else if (Array.from(modelSelector.options).some(opt => opt.value === DEFAULT_MODEL_NAME)) {
+                modelToSelectInitially = DEFAULT_MODEL_NAME;
+            } else if (modelSelector.options.length > 0 && modelSelector.options[0].value !== "") {
+                modelToSelectInitially = modelSelector.options[0].value;
+            }
+
+            if (modelToSelectInitially) {
+                modelSelector.value = modelToSelectInitially;
+            }
+
+            if (modelSelector.options.length > 0 && modelSelector.options[0].value !== "" && modelSelector.options[0].textContent !== "Error loading models" && modelSelector.options[0].textContent !== "No models found") {
+                 userInput.disabled = false;
+                 sendButton.disabled = false;
+            } else {
+                 userInput.disabled = true;
+                 sendButton.disabled = true;
+                 if (chatMessages.children.length === 0) { 
+                    addMessageToChat("Model loading failed or no models found. Please check Ollama.", 'bot', true);
+                 }
+            }
+        }
+        
+        function createEmptyBotMessageElement() {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', 'bot-message');
+            const spinner = document.createElement('div');
+            spinner.classList.add('spinner');
+            messageElement.appendChild(spinner);
+            chatMessages.appendChild(messageElement);
+            return messageElement;
+        }
+
+        function removeSpinner(messageElement) {
+            const spinner = messageElement.querySelector('.spinner');
+            if (spinner) spinner.remove();
+        }
+
+        function renderBotMessageContent(messageElement, messageText, isStreaming = false) {
+            if (isStreaming && messageText.length > 0 && messageElement.querySelector('.spinner')) {
+                 removeSpinner(messageElement);
+            }
+            messageElement.innerHTML = marked.parse(messageText); 
+            if (messageText.length === 0 && isStreaming && !messageElement.querySelector('.spinner')) { 
+                const spinner = document.createElement('div'); spinner.classList.add('spinner');
+                messageElement.appendChild(spinner); 
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight; 
+        }
+
+        function addMessageToChat(message, sender, isError = false) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message');
+            if (sender === 'user') {
+                messageElement.classList.add('user-message'); 
+                if (message.includes("--- Attachments ---")) {
+                    messageElement.innerHTML = marked.parse(message); 
+                } else {
+                    messageElement.textContent = message; 
+                }
+            } else { 
+                messageElement.classList.add('bot-message');
+                if (isError) messageElement.classList.add('error-message');
+                messageElement.innerHTML = marked.parse(message); 
+            }
+            chatMessages.appendChild(messageElement); chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendMessage() {
+            let messageText = userInput.value.trim(); 
+            const selectedModel = modelSelector.value;
+
+            if (messageText === '' && currentAttachments.length === 0) return;
+            if (!selectedModel || selectedModel === "No models found" || selectedModel === "Error loading") {
+                addMessageToChat("Please select a valid model.", 'bot', true); return;
+            }
+
+            let combinedMessageForDisplay = messageText; 
+            let promptContentForLLM = messageText;    
+
+            if (currentAttachments.length > 0) {
+                let attachmentsDisplayText = "\n\n--- Attachments ---\n";
+                let attachmentsContentForLLM = "";
+                currentAttachments.forEach(file => {
+                    attachmentsDisplayText += `[${file.name}]\n`; 
+                    attachmentsContentForLLM += `\n\n--- Attached File: ${file.name} ---\n\`\`\`\n${file.content}\n\`\`\`\n--- End of File: ${file.name} ---`;
+                });
+                combinedMessageForDisplay += attachmentsDisplayText;
+                promptContentForLLM += attachmentsContentForLLM;
+            }
+            
+            addMessageToChat(combinedMessageForDisplay, 'user'); 
+            
+            userInput.value = ''; 
+            const attachmentsToClear = [...currentAttachments]; 
+            currentAttachments = []; 
+            renderAttachments(); 
+
+            sendButton.disabled = true; userInput.disabled = true;
+            
+            conversationHistory.push({ role: 'user', content: combinedMessageForDisplay }); 
+            
+            const historyForPrompt = [...conversationHistory]; 
+            if (historyForPrompt.length > 0 && historyForPrompt[historyForPrompt.length -1].role === 'user') {
+                let llmMessageContent = messageText; 
+                if (attachmentsToClear.length > 0) {
+                    let tempAttachmentsContentForLLM = "";
+                     attachmentsToClear.forEach(file => {
+                        tempAttachmentsContentForLLM += `\n\n--- Attached File: ${file.name} ---\n\`\`\`\n${file.content}\n\`\`\`\n--- End of File: ${file.name} ---`;
+                    });
+                    llmMessageContent += tempAttachmentsContentForLLM;
+                }
+                historyForPrompt[historyForPrompt.length -1].content = llmMessageContent;
+            }
+
+            const fullPrompt = historyForPrompt.map(msg => `${msg.role.charAt(0).toUpperCase() + msg.role.slice(1)}: ${msg.content}`).join('\n') + `\nAssistant:`;
+            
+            const botMessageElement = createEmptyBotMessageElement(); 
+            let accumulatedResponseText = "";
+            let firstTokenReceived = false;
+
+            try {
+                const response = await fetch(`${OLLAMA_API_BASE_URL}/generate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: selectedModel, prompt: fullPrompt, stream: true }),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text(); let errorDetail = errorText;
+                    try { errorDetail = JSON.parse(errorText).error || errorText; } catch (e) {/*ignore*/}
+                    removeSpinner(botMessageElement); 
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorDetail}`);
+                }
+
+                const reader = response.body.getReader(); const decoder = new TextDecoder();
+                while (true) {
+                    const { value, done } = await reader.read(); if (done) break; 
+                    const chunk = decoder.decode(value); const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.trim() === '') continue;
+                        try {
+                            const parsedLine = JSON.parse(line);
+                            if (parsedLine.response) {
+                                if (!firstTokenReceived) firstTokenReceived = true; 
+                                accumulatedResponseText += parsedLine.response;
+                                renderBotMessageContent(botMessageElement, accumulatedResponseText, true); 
+                            }
+                        } catch (e) { console.error("Error parsing streamed JSON line:", e, "Line:", line); }
+                    }
+                }
+                
+                if (!firstTokenReceived && botMessageElement.querySelector('.spinner')) {
+                     removeSpinner(botMessageElement); 
+                }
+
+                renderBotMessageContent(botMessageElement, accumulatedResponseText, false); 
+                chatMessages.scrollTop = chatMessages.scrollHeight; 
+                conversationHistory.push({ role: 'assistant', content: accumulatedResponseText });
+                saveCurrentConversation(); 
+
+            } catch (error) {
+                console.error('Error fetching from Ollama:', error);
+                if(botMessageElement.querySelector('.spinner')) {
+                    removeSpinner(botMessageElement); 
+                }
+                botMessageElement.innerHTML = ''; botMessageElement.classList.add('error-message');
+                renderBotMessageContent(botMessageElement, `Error: ${error.message}`, false); 
+            } finally {
+                sendButton.disabled = false; userInput.disabled = false; userInput.focus();
+            }
+        }
+    </script>
+</body>
+</html>
+
